@@ -95,14 +95,27 @@ Response <- R6::R6Class("Response",
             self$error <- error
         },
         to_json = function() {
+            if (!is.null(self$error)) {
+                payload <- list(
+                    jsonrpc = self$jsonrpc,
+                    id = self$id,
+                    error = self$error
+                )
+
+                return(jsonlite::toJSON(
+                    payload,
+                    auto_unbox = TRUE,
+                    null = "null",
+                    force = TRUE
+                ))
+            }
+
             payload <- list(
                 jsonrpc = self$jsonrpc,
                 id = self$id,
                 result = self$result
             )
-            if (!is.null(self$error)) {
-                payload$error <- self$error
-            }
+
             response_to_json(payload)
         }
     )
