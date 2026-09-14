@@ -41,7 +41,7 @@ test_that("Native response JSON preserves UTF-8, control characters and names", 
         jsonlite::fromJSON(expected))
 })
 
-test_that("Response and error message wire formats retain jsonlite behavior", {
+test_that("Response and error message wire formats retain jsonlite encoding", {
     responses <- list(
         Response$new(1L),
         Response$new("request α", list(items = list(list(label = "😀")))),
@@ -51,13 +51,56 @@ test_that("Response and error message wire formats retain jsonlite behavior", {
         Response$new(5L, error = list(code = -32603L, message = "error", data = NULL))
     )
     for (response in responses) {
-        payload <- list(jsonrpc = response$jsonrpc, id = response$id, result = response$result)
-        if (!is.null(response$error)) payload$error <- response$error
+        if (!is.null(response$error)) {
+            payload <- list(
+                jsonrpc = response$jsonrpc,
+                id = response$id,
+                error = response$error
+            )
+        } else {
+            payload <- list(
+                jsonrpc = response$jsonrpc,
+                id = response$id,
+                result = response$result
+                )
+        }
+
         expected <- reference_response_json(payload)
         expect_identical(response$to_json(), expected)
         expect_identical(response$format(), paste0("Content-Length: ",
                 nchar(expected, type = "bytes"), "\r\n\r\n", expected))
     }
+})
+
+test_that("Error responses omit the result field", {
+    response <- ResponseErrorMessage$new(
+        1L,
+        "RequestCancelled",
+        "Request canceleed"
+    )
+
+    json <- response$to_json()
+    parsed <- jsonlite::fromJSON(json)
+
+    expect_true("error" %in% names(parsed))
+    expect_false("result" %in% names(parsed))
+    expect_identical(parsed$error$code, -32800L)
+})
+
+test_that("Successful null responses retain the result field", {
+    response <- Response$new(
+        1L,
+        result = NULL
+    )
+
+    json <- response$to_json()
+    parsed <- jsonlite::fromJSON(
+        json,
+        simlifyVector = FALSE
+    )
+
+    expect_true("result" %in% names(parsed))
+    expect_false("error" %in% names(parsed))
 })
 
 test_that("Package protocol wrappers use native JSON without changing their representation", {
